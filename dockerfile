@@ -17,6 +17,6 @@ WORKDIR /app
 COPY --from=build /app/out .
 EXPOSE 8000
 #CMD ["./door"] 
-ENTRYPOINT ["dotnet","door.dll"]
+ENTRYPOINT ["dotnet","posts.dll"]
 
 
