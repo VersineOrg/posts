@@ -29,9 +29,7 @@ namespace door
             var database = client.GetDatabase("UserDB");
             var collection = database.GetCollection<BsonDocument>("users");
             */
-
-
-            Console.WriteLine("Database connected");
+            
 
             while (true)
             {
@@ -48,8 +46,12 @@ namespace door
                 Console.WriteLine(req.Url.ToString());
                 Console.WriteLine(req.UserHostName);
                 Console.WriteLine(req.UserAgent);
-
-
+                
+                var reader = new StreamReader(req.InputStream);
+                string bodyString= reader.ReadToEnd();
+                dynamic body = JsonConvert.DeserializeObject(bodyString);
+                Console.WriteLine(body);
+                /*
                 // If `shutdown` url requested w/ POST, then shutdown the server after serving the page
                 if ((req.HttpMethod == "POST") && (req.Url.AbsolutePath == "/login"))
                 {
@@ -83,7 +85,7 @@ namespace door
                         success = "false",
                         message = "404"
                     };
-
+                    
                     string jsonString = JsonConvert.SerializeObject(response);
                     byte[] data = Encoding.UTF8.GetBytes(jsonString);
 
@@ -93,7 +95,7 @@ namespace door
                     // Write out to the response stream (asynchronously), then close it
                     await resp.OutputStream.WriteAsync(data, 0, data.Length);
                     resp.Close();
-                }
+                }*/
             }
         }
 
