@@ -1,41 +1,49 @@
+using System.Collections;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 
 namespace door
 {
+    
+    // Default Schema for a Http Response
     public class Response
     {
         public String success { get; set; }
         public String message { get; set; }
     }
+    
+   }
     class HttpServer
     {
+        
+        public static HttpListener? Listener;
 
-        public static HttpListener listener;
-        public static string url = "http://*:8000/";
-
-        public static async Task HandleIncomingConnections()
+        public static async Task HandleIncomingConnections(IConfigurationRoot config)
         {
-            // Replace the uri string with your MongoDB deployment's connection string.
 
-
-            /* var connectionString = "";
-            var client = new MongoClient(
-                connectionString
-            );
-            var database = client.GetDatabase("UserDB");
-            var collection = database.GetCollection<BsonDocument>("users");
+            // Connect to the MongoDB Database
+            /* 
+            string connectionString = config.GetValue<String>("MongoDB");
+            MongoClientSettings settings = MongoClientSettings.FromConnectionString(connectionString);
+            MongoClient client = new MongoClient(settings);
+            IMongoDatabase database = client.GetDatabase("UsersDB");
+            BsonClassMap.RegisterClassMap<User>();
+            IMongoCollection<User> collection = database.GetCollection<User>("users");
+            Console.WriteLine("Database connected");
             */
             
-
+            
+            
             while (true)
             {
-                // While a user hasn't visited the `shutdown` url, keep on handling requests
                 // Will wait here until we hear from a connection
-                HttpListenerContext ctx = await listener.GetContextAsync();
+                HttpListenerContext ctx = await Listener?.GetContextAsync()!;
 
                 // Peel out the requests and response objects
                 HttpListenerRequest req = ctx.Request;
@@ -43,78 +51,54 @@ namespace door
 
                 // Print out some info about the request
                 Console.WriteLine(req.HttpMethod);
-                Console.WriteLine(req.Url.ToString());
+                Console.WriteLine(req.Url?.ToString());
                 Console.WriteLine(req.UserHostName);
                 Console.WriteLine(req.UserAgent);
+
                 
-                var reader = new StreamReader(req.InputStream);
-                string bodyString= reader.ReadToEnd();
-                dynamic body = JsonConvert.DeserializeObject(bodyString);
-                Console.WriteLine(body);
-                /*
-                // If `shutdown` url requested w/ POST, then shutdown the server after serving the page
-                if ((req.HttpMethod == "POST") && (req.Url.AbsolutePath == "/login"))
-                {
-                    var reader = new StreamReader(req.InputStream);
-                    string bodyString= reader.ReadToEnd();
-
-                    dynamic body = JsonConvert.DeserializeObject(bodyString);
-                    Console.WriteLine(body);
-
-                    var response = new Response
+                    Response response = new Response
                     {
                         success = "true",
-                        message = "login requested"
-                    };
-
-                    string jsonString = JsonConvert.SerializeObject(response);
-                    byte[] data = Encoding.UTF8.GetBytes(jsonString);
-
-                    resp.ContentType = "application/json";
-                    resp.ContentEncoding = Encoding.UTF8;
-                    resp.ContentLength64 = data.LongLength;
-
-                    // Write out to the response stream (asynchronously), then close it
-                    await resp.OutputStream.WriteAsync(data, 0, data.Length);
-                    resp.Close();
-                }
-                else
-                {
-                    var response = new Response
-                    {
-                        success = "false",
-                        message = "404"
+                        message = "200"
                     };
                     
                     string jsonString = JsonConvert.SerializeObject(response);
                     byte[] data = Encoding.UTF8.GetBytes(jsonString);
-
+                    
                     resp.ContentType = "application/json";
                     resp.ContentEncoding = Encoding.UTF8;
                     resp.ContentLength64 = data.LongLength;
+                    
                     // Write out to the response stream (asynchronously), then close it
                     await resp.OutputStream.WriteAsync(data, 0, data.Length);
-                    resp.Close();
-                }*/
+                    resp.Close();    
+                }
             }
-        }
 
 
         public static void Main(string[] args)
         {
+            // Build the configuration for the env variables
+            IConfigurationRoot config =
+                new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", true)
+                    .AddEnvironmentVariables()
+                    .Build();
+            
             // Create a Http server and start listening for incoming connections
-
-            listener = new HttpListener();
-            listener.Prefixes.Add(url);
-            listener.Start();
+            string url = "http://*:" + config.GetValue<String>("Port") + "/";
+            Listener = new HttpListener();
+            Listener.Prefixes.Add(url);
+            Listener.Start();
             Console.WriteLine("Listening for connections on {0}", url);
 
             // Handle requests
-            Task listenTask = HandleIncomingConnections();
+            Task listenTask = HandleIncomingConnections(config);
             listenTask.GetAwaiter().GetResult();
 
             // Close the listener
-            listener.Close();
+            Listener.Close();
         }
     }
 }
