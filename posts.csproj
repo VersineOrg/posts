@@ -1,16 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<project sdk="microsoft.net.sdk.web">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+  <propertygroup>
+    <targetframework>net6.0</targetframework>
+    <nullable>enable</nullable>
+    <implicitusings>enable</implicitusings>
+  </propertygroup>
 
-  <ItemGroup>
-    <PackageReference Include="MongoDB.Driver" Version="2.14.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="System.Text.Encoding" Version="4.3.0" />
-    <PackageReference Include="System.Text.Encodings.Web" Version="6.0.0" />
-  </ItemGroup>
+  <itemgroup>
+    <packagereference include="mongodb.driver" version="2.14.1" />
+    <packagereference include="newtonsoft.json" version="13.0.1" />
+    <packagereference include="system.text.encoding" version="4.3.0" />
+    <packagereference include="system.text.encodings.web" version="6.0.0" />
+  </itemgroup>
 
-</Project>
+</project>

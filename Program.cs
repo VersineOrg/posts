@@ -1,14 +1,8 @@
-using System.Collections;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Attributes;
-using MongoDB.Driver;
 
-namespace door
+namespace posts
 {
     
     // Default Schema for a Http Response
@@ -56,7 +50,7 @@ namespace door
                 Console.WriteLine(req.UserAgent);
 
                 
-                    Response response = new Response
+                    posts.Response response = new posts.Response()
                     {
                         success = "true",
                         message = "200"
@@ -72,8 +66,8 @@ namespace door
                     // Write out to the response stream (asynchronously), then close it
                     await resp.OutputStream.WriteAsync(data, 0, data.Length);
                     resp.Close();    
-                }
             }
+        }
 
 
         public static void Main(string[] args)
@@ -101,4 +95,3 @@ namespace door
             Listener.Close();
         }
     }
-}
