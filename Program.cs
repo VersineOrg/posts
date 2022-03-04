@@ -1,39 +1,59 @@
 using System.Net;
 using System.Text;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
 using Newtonsoft.Json;
+using posts;
 
 namespace posts
 {
-    
-    // Default Schema for a Http Response
-    public class Response
+
+    public class Post
     {
-        public String success { get; set; }
-        public String message { get; set; }
+        public ObjectId _id { get; set; }
+
+        public String Author { get; set; }
+
+        public String Content { get; set; }
+
+        public List<String> Attachments { get; set; }
+
+        public List<String> Circles { get; set; }
+
+        public DateTime Date { get; set; }
+
+
+        [BsonConstructor]
+        public Post(string author, string content, List<String> circles, List<String> attachments)
+        {
+            this.Author = author;
+            this.Content = content;
+            this.Attachments = attachments;
+            this.Circles = circles;
+            this.Date = DateTime.Now;
+        }
     }
-    
-   }
+
     class HttpServer
     {
-        
+
         public static HttpListener? Listener;
 
         public static async Task HandleIncomingConnections(IConfigurationRoot config)
         {
 
-            // Connect to the MongoDB Database
-            /* 
             string connectionString = config.GetValue<String>("MongoDB");
             MongoClientSettings settings = MongoClientSettings.FromConnectionString(connectionString);
             MongoClient client = new MongoClient(settings);
             IMongoDatabase database = client.GetDatabase("UsersDB");
-            BsonClassMap.RegisterClassMap<User>();
-            IMongoCollection<User> collection = database.GetCollection<User>("users");
+            BsonClassMap.RegisterClassMap<Post>();
+            IMongoCollection<Post> collection = database.GetCollection<Post>("users");
             Console.WriteLine("Database connected");
-            */
-            
-            
-            
+
+
+
             while (true)
             {
                 // Will wait here until we hear from a connection
@@ -49,23 +69,8 @@ namespace posts
                 Console.WriteLine(req.UserHostName);
                 Console.WriteLine(req.UserAgent);
 
-                
-                    posts.Response response = new posts.Response()
-                    {
-                        success = "true",
-                        message = "200"
-                    };
-                    
-                    string jsonString = JsonConvert.SerializeObject(response);
-                    byte[] data = Encoding.UTF8.GetBytes(jsonString);
-                    
-                    resp.ContentType = "application/json";
-                    resp.ContentEncoding = Encoding.UTF8;
-                    resp.ContentLength64 = data.LongLength;
-                    
-                    // Write out to the response stream (asynchronously), then close it
-                    await resp.OutputStream.WriteAsync(data, 0, data.Length);
-                    resp.Close();    
+                // TODO: Send response
+                Response.Fail(resp, "404");
             }
         }
 
@@ -79,7 +84,7 @@ namespace posts
                     .AddJsonFile("appsettings.json", true)
                     .AddEnvironmentVariables()
                     .Build();
-            
+
             // Create a Http server and start listening for incoming connections
             string url = "http://*:" + config.GetValue<String>("Port") + "/";
             Listener = new HttpListener();
@@ -95,3 +100,4 @@ namespace posts
             Listener.Close();
         }
     }
+}
