@@ -1,97 +1,116 @@
 using System.Net;
-using System.Text;
+using MongoDB.Bson;
 using Newtonsoft.Json;
 
-namespace posts
+namespace posts;
+
+class HttpServer
 {
-    
-    // Default Schema for a Http Response
-    public class Response
-    {
-        public String success { get; set; }
-        public String message { get; set; }
-    }
-    
-   }
-    class HttpServer
-    {
         
-        public static HttpListener? Listener;
+    public static HttpListener? Listener;
 
-        public static async Task HandleIncomingConnections(IConfigurationRoot config)
+    public static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase)
+    {
+        while (true)
         {
+            HttpListenerContext ctx = await Listener?.GetContextAsync()!;
 
-            // Connect to the MongoDB Database
-            /* 
-            string connectionString = config.GetValue<String>("MongoDB");
-            MongoClientSettings settings = MongoClientSettings.FromConnectionString(connectionString);
-            MongoClient client = new MongoClient(settings);
-            IMongoDatabase database = client.GetDatabase("UsersDB");
-            BsonClassMap.RegisterClassMap<User>();
-            IMongoCollection<User> collection = database.GetCollection<User>("users");
-            Console.WriteLine("Database connected");
-            */
-            
-            
-            
-            while (true)
-            {
-                // Will wait here until we hear from a connection
-                HttpListenerContext ctx = await Listener?.GetContextAsync()!;
-
-                // Peel out the requests and response objects
-                HttpListenerRequest req = ctx.Request;
-                HttpListenerResponse resp = ctx.Response;
-
-                // Print out some info about the request
-                Console.WriteLine(req.HttpMethod);
-                Console.WriteLine(req.Url?.ToString());
-                Console.WriteLine(req.UserHostName);
-                Console.WriteLine(req.UserAgent);
-
+            HttpListenerRequest req = ctx.Request;
+            HttpListenerResponse resp = ctx.Response;
                 
-                    posts.Response response = new posts.Response()
-                    {
-                        success = "true",
-                        message = "200"
-                    };
-                    
-                    string jsonString = JsonConvert.SerializeObject(response);
-                    byte[] data = Encoding.UTF8.GetBytes(jsonString);
-                    
-                    resp.ContentType = "application/json";
-                    resp.ContentEncoding = Encoding.UTF8;
-                    resp.ContentLength64 = data.LongLength;
-                    
-                    // Write out to the response stream (asynchronously), then close it
-                    await resp.OutputStream.WriteAsync(data, 0, data.Length);
-                    resp.Close();    
-            }
-        }
-
-
-        public static void Main(string[] args)
-        {
-            // Build the configuration for the env variables
-            IConfigurationRoot config =
-                new ConfigurationBuilder()
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile("appsettings.json", true)
-                    .AddEnvironmentVariables()
-                    .Build();
+            Console.WriteLine(req.HttpMethod);
+            Console.WriteLine(req.Url?.ToString());
+            Console.WriteLine(req.UserHostName);
+            Console.WriteLine(req.UserAgent);
             
-            // Create a Http server and start listening for incoming connections
-            string url = "http://*:" + config.GetValue<String>("Port") + "/";
-            Listener = new HttpListener();
-            Listener.Prefixes.Add(url);
-            Listener.Start();
-            Console.WriteLine("Listening for connections on {0}", url);
+            if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/addPost")
+            {
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                
+                string token;
+                string message;
+                
+                try
+                {
+                    token = ((string) body.token).Trim();
+                    message = ((string) body.message).Trim();
+                }
+                catch
+                {
+                    token = "";
+                    message = "";
+                }
 
-            // Handle requests
-            Task listenTask = HandleIncomingConnections(config);
-            listenTask.GetAwaiter().GetResult();
-
-            // Close the listener
-            Listener.Close();
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(message)))
+                {
+                    string id = WebToken.GetIdFromToken(token);
+                    if (!id.Equals(""))
+                    {
+                        Console.WriteLine(new ObjectId(id));
+                        if (userDatabase.GetSingleDatabaseEntry("_id", new ObjectId(id), out BsonDocument user))
+                        {
+                            Post post = new Post(user.GetElement("_id").Value.AsObjectId.ToString(),
+                                message);
+                            database.AddSingleDatabaseEntry(post.ToBson());
+                        }
+                        else
+                        {
+                            Response.Fail(resp,"user doesn't exist");
+                        }
+                    }
+                    else
+                    {
+                        Response.Fail(resp,"invalid token");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp,"invalid body");
+                }
+            }
+            else
+            {
+                Response.Fail(resp, "404");
+            }
+            // close response
+            resp.Close();
         }
     }
+
+    public static void Main(string[] args)
+    {
+        IConfigurationRoot config =
+            new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", true)
+                .AddEnvironmentVariables()
+                .Build();
+            
+        string connectionString = config.GetValue<String>("connectionString");
+        string databaseNAme = config.GetValue<String>("databaseName");
+        string collectionName = config.GetValue<String>("collectionName");
+        
+        string databaseNAme1 = config.GetValue<String>("databaseName1");
+        string collectionName1 = config.GetValue<String>("collectionName1");
+        
+        // Create a new EasyMango database
+        EasyMango.EasyMango database = new EasyMango.EasyMango(connectionString,databaseNAme,collectionName);
+        EasyMango.EasyMango userdb = new EasyMango.EasyMango(connectionString,databaseNAme1,collectionName1);
+            
+        // Create a Http server and start listening for incoming connections
+        string url = "http://*:" + config.GetValue<String>("Port") + "/";
+        Listener = new HttpListener();
+        Listener.Prefixes.Add(url);
+        Listener.Start();
+        Console.WriteLine("Listening for connections on {0}", url);
+
+        // Handle requests
+        Task listenTask = HandleIncomingConnections(database, userdb);
+        listenTask.GetAwaiter().GetResult();
+        
+        // Close the listener
+        Listener.Close();
+    }
+}
