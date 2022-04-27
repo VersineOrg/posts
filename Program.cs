@@ -54,6 +54,7 @@ class HttpServer
                             Post post = new Post(user.GetElement("_id").Value.AsObjectId.ToString(),
                                 message);
                             database.AddSingleDatabaseEntry(post.ToBson());
+                            Response.Success(resp, "post created successfully", null);
                         }
                         else
                         {
