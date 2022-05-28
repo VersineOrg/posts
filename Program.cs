@@ -6,14 +6,13 @@ namespace posts;
 
 class HttpServer
 {
-        
-    public static HttpListener? Listener;
+    private static HttpListener? listener;
 
-    public static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase)
+    private static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase)
     {
         while (true)
         {
-            HttpListenerContext ctx = await Listener?.GetContextAsync()!;
+            HttpListenerContext ctx = await listener?.GetContextAsync()!;
 
             HttpListenerRequest req = ctx.Request;
             HttpListenerResponse resp = ctx.Response;
@@ -51,7 +50,7 @@ class HttpServer
                         Console.WriteLine(new ObjectId(id));
                         if (userDatabase.GetSingleDatabaseEntry("_id", new ObjectId(id), out BsonDocument user))
                         {
-                            Post post = new Post(user.GetElement("_id").Value.AsObjectId.ToString(),
+                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,
                                 message);
                             database.AddSingleDatabaseEntry(post.ToBson());
                             Response.Success(resp, "post created successfully", null);
@@ -90,28 +89,28 @@ class HttpServer
                 .Build();
             
         string connectionString = config.GetValue<String>("connectionString");
-        string databaseNAme = config.GetValue<String>("databaseName");
-        string collectionName = config.GetValue<String>("collectionName");
+        string postDatabaseName = config.GetValue<String>("postDatabaseName");
+        string postCollectionName = config.GetValue<String>("postCollectionName");
         
-        string databaseNAme1 = config.GetValue<String>("databaseName1");
-        string collectionName1 = config.GetValue<String>("collectionName1");
+        string userDatabaseName = config.GetValue<String>("userDatabaseName");
+        string userCollectionName = config.GetValue<String>("userCollectionName");
         
         // Create a new EasyMango database
-        EasyMango.EasyMango database = new EasyMango.EasyMango(connectionString,databaseNAme,collectionName);
-        EasyMango.EasyMango userdb = new EasyMango.EasyMango(connectionString,databaseNAme1,collectionName1);
+        EasyMango.EasyMango postDatabase = new EasyMango.EasyMango(connectionString,postDatabaseName,postCollectionName);
+        EasyMango.EasyMango userDatabase = new EasyMango.EasyMango(connectionString,userDatabaseName,userCollectionName);
             
         // Create a Http server and start listening for incoming connections
         string url = "http://*:" + config.GetValue<String>("Port") + "/";
-        Listener = new HttpListener();
-        Listener.Prefixes.Add(url);
-        Listener.Start();
+        listener = new HttpListener();
+        listener.Prefixes.Add(url);
+        listener.Start();
         Console.WriteLine("Listening for connections on {0}", url);
 
         // Handle requests
-        Task listenTask = HandleIncomingConnections(database, userdb);
+        Task listenTask = HandleIncomingConnections(postDatabase, userDatabase);
         listenTask.GetAwaiter().GetResult();
         
         // Close the listener
-        Listener.Close();
+        listener.Close();
     }
 }

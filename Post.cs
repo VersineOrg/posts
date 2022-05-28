@@ -5,27 +5,31 @@ namespace posts;
 
 public class Post
 {
-    public String UserId { get; set; }
+    public BsonObjectId UserId { get; set; }
     public String Message { get; set; }
 
     
-    public Post(string id, string password)
+    public Post(BsonObjectId id, string message)
     {
-        this.UserId = id;
-        this.Message = password;
+        UserId = id;
+        Message = message;
     }
 
     public Post(BsonDocument document)
     {
-        this.UserId = document.GetElement("userId").Value.AsString;
-        this.Message = document.GetElement("message").Value.AsString;;
+        UserId = document.GetElement("userId").Value.AsObjectId;
+        Message = document.GetElement("message").Value.AsString;;
     }
 
     public BsonDocument ToBson()
     {
         BsonDocument result = new BsonDocument(
-            new BsonElement("userId", UserId),
-            new BsonElement("message", Message));
+            (IEnumerable<BsonElement>)
+            new BsonElement[]
+            {
+                new ("userId", UserId),
+                new ("message", Message)
+            });
         return result;
     }
 }    
