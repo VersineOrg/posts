@@ -8,7 +8,7 @@ class HttpServer
 {
     private static HttpListener? listener;
 
-    private static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase, EasyMango.EasyMango postDatabase)
+    private static async Task HandleIncomingConnections(EasyMango.EasyMango userDatabase, EasyMango.EasyMango postDatabase)
     {
         while (true)
         {
@@ -31,7 +31,7 @@ class HttpServer
                 string token;
                 string message;
                 string media;
-                List<string> circles = new List<string>();
+                List<BsonValue> circles = new List<BsonValue>();
                 uint date = (uint) DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
                 
                 
@@ -39,14 +39,26 @@ class HttpServer
                 {
                     token = ((string) body.token).Trim();
                     message = ((string) body.message).Trim();
-                    media = ((string) body.media).Trim();
+                    foreach (var circle in body.circles)
+                    {
+                        circles.Add(circle);
+                    }
                 }
                 catch
                 {
                     token = "";
                     message = "";
+                    
+                }
+                try
+                {
+                    media = ((string) body.media).Trim();
+                }
+                catch
+                {
                     media = "";
                 }
+                
                 
                 if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(message))) 
                 {
@@ -55,8 +67,18 @@ class HttpServer
                     {
                         if (userDatabase.GetSingleDatabaseEntry("_id", new ObjectId(id), out BsonDocument user))
                         {
-                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,message);
-                            database.AddSingleDatabaseEntry(post.ToBson());
+                            /*if (CDN.Add(media, out pathtomedia) )
+                            {
+                                Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,pathtomedia);
+                                postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                                Response.Success(resp, "post created successfully", null);
+                            }
+                            else
+                            {
+                                Response.Fail(resp,"An error occured with the CDN");
+                            }*/
+                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
+                            postDatabase.AddSingleDatabaseEntry(post.ToBson());
                             Response.Success(resp, "post created successfully", null);
                         }
                         else
@@ -127,6 +149,67 @@ class HttpServer
                     Response.Fail(resp,"invalid body");
                 }
             }
+            
+            else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/editPost")
+            {
+                string postid; //id of the post to edit
+                string token; //token of the user asking to rm 
+                List<BsonValue> newcircles; // new list of circles of a post 
+                
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                
+                try
+                {
+                    token = ((string) body.token).Trim();
+                    postid = ((string) body.id).Trim();
+                    newcircles = ((List<BsonValue>)body.newcircles);
+                }
+                catch
+                {
+                    token = "";
+                    postid = "";
+                    newcircles = null;
+                }
+
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid) || newcircles == null))
+                {
+                    string id = WebToken.GetIdFromToken(token);
+                    if (!id.Equals(""))
+                    {
+                        if (postDatabase.GetSingleDatabaseEntry("_id", postid, out BsonDocument post))
+                        {
+                            if (post.GetElement("userId").Value.AsObjectId.ToString() == id)
+                            {
+                                Post newpost = new Post(post);
+                                newpost.Circles = newcircles;
+                                BsonDocument newbson = newpost.ToBson();
+                                postDatabase.ReplaceSingleDatabaseEntry("_id", postid, newbson);
+                                postDatabase.ReplaceSingleDatabaseEntry("circles", newcircles, post);
+                                Response.Success(resp, "post deleted successfully", null);
+                            }
+                            else
+                            {
+                                Response.Fail(resp,"You do not have the ownership on this post");
+                            }
+                        }
+                        else
+                        {
+                            Response.Fail(resp,"post doesn't exist");
+                        }
+                    }
+                    else
+                    {
+                        Response.Fail(resp,"invalid token");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp,"invalid body");
+                }
+            }
+            
             else if (req.HttpMethod == "GET" && req.Url?.AbsolutePath == "/health")
             {
                 Response.Success(resp,"service up","");
