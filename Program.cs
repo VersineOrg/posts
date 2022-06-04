@@ -8,7 +8,7 @@ class HttpServer
 {
     private static HttpListener? listener;
 
-    private static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase)
+    private static async Task HandleIncomingConnections(EasyMango.EasyMango database, EasyMango.EasyMango userDatabase, EasyMango.EasyMango postDatabase)
     {
         while (true)
         {
@@ -30,34 +30,91 @@ class HttpServer
                 
                 string token;
                 string message;
+                string media;
+                List<string> circles = new List<string>();
+                uint date = (uint) DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+                
                 
                 try
                 {
                     token = ((string) body.token).Trim();
                     message = ((string) body.message).Trim();
+                    media = ((string) body.media).Trim();
                 }
                 catch
                 {
                     token = "";
                     message = "";
+                    media = "";
                 }
-
-                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(message)))
+                
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(message))) 
                 {
                     string id = WebToken.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        Console.WriteLine(new ObjectId(id));
                         if (userDatabase.GetSingleDatabaseEntry("_id", new ObjectId(id), out BsonDocument user))
                         {
-                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,
-                                message);
+                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,message);
                             database.AddSingleDatabaseEntry(post.ToBson());
                             Response.Success(resp, "post created successfully", null);
                         }
                         else
                         {
                             Response.Fail(resp,"user doesn't exist");
+                        }
+                    }
+                    else
+                    {
+                        Response.Fail(resp,"invalid token");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp,"invalid body");
+                }
+            }
+            else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/rmPost")
+            {
+                string postid; //id of the post to rm
+                string token; //token of the user asking to rm 
+                
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                
+                try
+                {
+                    token = ((string) body.token).Trim();
+                    postid = ((string) body.id).Trim();
+                }
+                catch
+                {
+                    token = "";
+                    postid = "";
+                }
+
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid)))
+                {
+                    string id = WebToken.GetIdFromToken(token);
+                    if (!id.Equals(""))
+                    {
+                        if (postDatabase.GetSingleDatabaseEntry("_id", postid, out BsonDocument post))
+                        {
+                            if (post.GetElement("userId").Value.AsObjectId.ToString() == id)
+                            {
+                                postDatabase.RemoveSingleDatabaseEntry("_id", postid);
+                                //DELETE FROM CDN
+                                Response.Success(resp, "post deleted successfully", null);
+                            }
+                            else
+                            {
+                                Response.Fail(resp,"You do not have the ownership on this post");
+                            }
+                        }
+                        else
+                        {
+                            Response.Fail(resp,"post doesn't exist");
                         }
                     }
                     else
