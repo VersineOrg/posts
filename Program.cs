@@ -1,6 +1,9 @@
 using System.Net;
+using System.Text;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace posts;
 
@@ -8,8 +11,63 @@ class HttpServer
 {
     private static HttpListener? listener;
 
-    private static async Task HandleIncomingConnections(EasyMango.EasyMango userDatabase, EasyMango.EasyMango postDatabase)
+    private static async Task HandleIncomingConnections(EasyMango.EasyMango userDatabase, EasyMango.EasyMango postDatabase,WebToken.WebToken jwt, string CDNurl)
     {
+        
+         async Task<bool> DeleteFile(string filename, string CDNurl)
+        {
+            HttpClient client = new HttpClient();
+        
+            Dictionary<string, string> body = new Dictionary<string, string>
+            {
+                {"id",filename}
+            };
+        
+        
+            string requestBody = JsonConvert.SerializeObject(body);
+            var httpContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
+            var result = await client.PostAsync(CDNurl + "/deleteFile", httpContent);
+            string bodystr = await result.Content.ReadAsStringAsync();
+            dynamic json = JsonConvert.DeserializeObject(bodystr)!;
+            return ((string) json.status == "success");
+        }
+         
+         async Task<Tuple<bool,string>> AddFile(string media, string CDNurl)
+         {
+             HttpClient client = new HttpClient();
+        
+             Dictionary<string, string> body = new Dictionary<string, string>
+             {
+                 {"data",media}
+             };
+        
+        
+             string requestBody = JsonConvert.SerializeObject(body);
+             var httpContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
+             var result = await client.PostAsync(CDNurl + "/addFile", httpContent);
+             string bodystr = await result.Content.ReadAsStringAsync();
+             dynamic json = JsonConvert.DeserializeObject(bodystr)!;
+             return new Tuple<bool, string>((string)json.status == "success",(string)json.data);
+         }
+        
+         async Task<Tuple<string,string>> GetFile(string pathtomedia,string CDNurl)
+         {
+             HttpClient client = new HttpClient();
+        
+             Dictionary<string, string> body = new Dictionary<string, string>
+             {
+                 {"id",pathtomedia}
+             };
+        
+        
+             string requestBody = JsonConvert.SerializeObject(body);
+             var httpContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
+             var result = await client.PostAsync(CDNurl + "/getFile", httpContent);
+             string bodystr = await result.Content.ReadAsStringAsync();
+             dynamic json = JsonConvert.DeserializeObject(bodystr)!;
+             return new Tuple<string, string>((string)json.data,(string)json.message);
+         }
+         
         while (true)
         {
             HttpListenerContext ctx = await listener?.GetContextAsync()!;
@@ -39,19 +97,18 @@ class HttpServer
                 {
                     token = ((string) body.token).Trim();
                     message = ((string) body.message).Trim();
-                    foreach (var circle in body.circles)
-                    {
-                        circles.Add(circle);
-                    }
                 }
                 catch
                 {
                     token = "";
                     message = "";
-                    
                 }
                 try
                 {
+                    foreach (var circle in body.circles)
+                    {
+                        circles.Add(circle.ToString());
+                    }
                     media = ((string) body.media).Trim();
                 }
                 catch
@@ -62,24 +119,32 @@ class HttpServer
                 
                 if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(message))) 
                 {
-                    string id = WebToken.GetIdFromToken(token);
+                    string id = jwt.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        if (userDatabase.GetSingleDatabaseEntry("_id", new ObjectId(id), out BsonDocument user))
+                        if (userDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(id)), out BsonDocument user))
                         {
-                            /*if (CDN.Add(media, out pathtomedia) )
+                            Tuple<bool,string> CDNresponse = AddFile(media, CDNurl).Result;
+                            if (CDNresponse.Item1)
                             {
-                                Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,pathtomedia);
+                                Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,CDNresponse.Item2,circles);
                                 postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                                Response.Success(resp, "post created successfully", null);
+                                if (postDatabase.GetSingleDatabaseEntry("pathtomedia",CDNresponse.Item2,out BsonDocument postindb))
+                                {
+                                    Response.Success(resp, "post created successfully", postindb.GetElement("_id").Value.AsObjectId.ToString());
+                                }
+                                else
+                                {
+                                    Response.Fail(resp,"An error occured with the Database");
+                                }
                             }
                             else
                             {
                                 Response.Fail(resp,"An error occured with the CDN");
-                            }*/
-                            Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
-                            postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                            Response.Success(resp, "post created successfully", null);
+                            }
+                            //Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
+                            //postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                            //Response.Success(resp, "post created successfully", null);
                         }
                         else
                         {
@@ -99,7 +164,8 @@ class HttpServer
             else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/rmPost")
             {
                 string postid; //id of the post to rm
-                string token; //token of the user asking to rm 
+                string token; //token of the user asking to rm
+                string pathtomedia;
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
@@ -118,16 +184,23 @@ class HttpServer
 
                 if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid)))
                 {
-                    string id = WebToken.GetIdFromToken(token);
+                    string id = jwt.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        if (postDatabase.GetSingleDatabaseEntry("_id", postid, out BsonDocument post))
+                        if (postDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), out BsonDocument post))
                         {
                             if (post.GetElement("userId").Value.AsObjectId.ToString() == id)
                             {
-                                postDatabase.RemoveSingleDatabaseEntry("_id", postid);
+                                pathtomedia = post.GetElement("pathtomedia").Value.AsString;
                                 //DELETE FROM CDN
-                                Response.Success(resp, "post deleted successfully", null);
+                                if (DeleteFile(pathtomedia, CDNurl).Result && postDatabase.RemoveSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid))))
+                                {
+                                    Response.Success(resp, "post deleted successfully", null);
+                                }
+                                else
+                                {
+                                    Response.Fail(resp,"Couldn't delete post");
+                                }
                             }
                             else
                             {
@@ -164,7 +237,11 @@ class HttpServer
                 {
                     token = ((string) body.token).Trim();
                     postid = ((string) body.id).Trim();
-                    newcircles = ((List<BsonValue>)body.newcircles);
+                    newcircles = new List<BsonValue>();
+                    foreach (var circle in body.circles)
+                    {
+                        newcircles.Add(circle.ToString());
+                    }
                 }
                 catch
                 {
@@ -175,19 +252,24 @@ class HttpServer
 
                 if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid) || newcircles == null))
                 {
-                    string id = WebToken.GetIdFromToken(token);
+                    string id = jwt.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        if (postDatabase.GetSingleDatabaseEntry("_id", postid, out BsonDocument post))
+                        if (postDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), out BsonDocument post))
                         {
                             if (post.GetElement("userId").Value.AsObjectId.ToString() == id)
                             {
                                 Post newpost = new Post(post);
                                 newpost.Circles = newcircles;
                                 BsonDocument newbson = newpost.ToBson();
-                                postDatabase.ReplaceSingleDatabaseEntry("_id", postid, newbson);
-                                postDatabase.ReplaceSingleDatabaseEntry("circles", newcircles, post);
-                                Response.Success(resp, "post deleted successfully", null);
+                                if (postDatabase.ReplaceSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), newbson))
+                                {
+                                    Response.Success(resp, "post edited successfully", null);
+                                }
+                                else
+                                {
+                                    Response.Fail(resp,"An error occured with the database");
+                                }
                             }
                             else
                             {
@@ -209,7 +291,162 @@ class HttpServer
                     Response.Fail(resp,"invalid body");
                 }
             }
-            
+            else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/vote")
+            {
+                string token;
+                string postid;
+                string direction;
+                
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+
+                try
+                {
+                    token = ((string) body.token).Trim();
+                    postid = ((string) body.id).Trim();
+                    direction = ((string) body.direction).Trim();
+                }
+                catch
+                {
+                    token = "";
+                    postid = "";
+                    direction = "";
+                }
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid) ))
+                {
+                    string id = jwt.GetIdFromToken(token);
+                    if (!id.Equals(""))
+                    {
+                        if (postDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), out BsonDocument post))
+                        {
+                            
+                            if (direction == "up")
+                            {
+                                Post newpost = new Post(post);
+                                if (newpost.Upvoter.Contains(new BsonObjectId(new ObjectId(postid))))
+                                {
+                                    newpost.Upvoter.Remove(new BsonObjectId(new ObjectId(postid)));
+                                }
+                                else
+                                {
+                                    newpost.Upvoter.Add(new BsonObjectId(new ObjectId(postid)));
+                                }
+
+                                BsonDocument newbson = newpost.ToBson();
+                                if (postDatabase.ReplaceSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), newbson))
+                                {
+                                    Response.Success(resp, "post upvoted successfully", null);
+                                }
+                                else
+                                {
+                                    Response.Fail(resp,"An error occured with the database");
+                                }
+                            }
+                            else if (direction == "down")
+                            {
+                                Post newpost = new Post(post);
+                                if (newpost.Downvoter.Contains(new BsonObjectId(new ObjectId(postid))))
+                                {
+                                    newpost.Downvoter.Remove(new BsonObjectId(new ObjectId(postid)));
+                                }
+                                else
+                                {
+                                    newpost.Downvoter.Add(new BsonObjectId(new ObjectId(postid)));
+                                }
+
+                                BsonDocument newbson = newpost.ToBson();
+                                if (postDatabase.ReplaceSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), newbson))
+                                {
+                                    Response.Success(resp, "post downvoted successfully", null);
+                                }
+                                else
+                                {
+                                    Response.Fail(resp,"An error occured with the database");
+                                }
+                            }
+                            else
+                            {
+                                Response.Fail(resp, "invalid direction");
+                            }
+                            
+                        }
+                        else
+                        {
+                            Response.Fail(resp,"post doesn't exist");
+                        }
+                    }
+                    else
+                    {
+                        Response.Fail(resp,"invalid token");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp,"invalid body");
+                }
+            }
+            else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/getPost")
+            {
+                string token;
+                string postid;
+
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+
+                try
+                {
+                    token = ((string) body.token).Trim();
+                    postid = ((string) body.id).Trim();
+                }
+                catch
+                {
+                    token = "";
+                    postid = "";
+                }
+                if (!(String.IsNullOrEmpty(token) || String.IsNullOrEmpty(postid)))
+                {
+                    string id = jwt.GetIdFromToken(token);
+                    if (!id.Equals(""))
+                    {
+                        // TODO /!\ have to check if ID is allowed to get post => is in one of the cirlces of the post
+                        if (postDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(postid)), out BsonDocument post))
+                        {
+                            Post postO = new Post(post);
+                            string pathtomedia = postO.PathToMedia;
+                            string media = GetFile(pathtomedia, CDNurl).Result.Item1;
+                            Dictionary<string, string> respbody = new Dictionary<string, string>
+                            {
+                                {"postid",postid},
+                                {"userid",postO.UserId.Value.ToString()},
+                                {"message",postO.Message},
+                                {"date",postO.Date.ToString()},
+                                {"media",media},
+                                {"Cirlces",postO.Circles.ToString()},
+                                {"upvoter",postO.Upvoter.ToString()},
+                                {"downvoter",postO.Downvoter.ToString()}
+                            };
+        
+        
+                            string requestBody = JsonConvert.SerializeObject(respbody);
+                            Response.Success(resp,"success",requestBody);
+                        }
+                        else
+                        {
+                            Response.Fail(resp,"post doesn't exist");
+                        }
+                    }
+                    else
+                    {
+                        Response.Fail(resp,"invalid token");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp,"invalid body");
+                }
+            }
             else if (req.HttpMethod == "GET" && req.Url?.AbsolutePath == "/health")
             {
                 Response.Success(resp,"service up","");
@@ -242,16 +479,19 @@ class HttpServer
         // Create a new EasyMango database
         EasyMango.EasyMango postDatabase = new EasyMango.EasyMango(connectionString,postDatabaseName,postCollectionName);
         EasyMango.EasyMango userDatabase = new EasyMango.EasyMango(connectionString,userDatabaseName,userCollectionName);
-            
+        
         // Create a Http server and start listening for incoming connections
         string url = "http://*:" + config.GetValue<String>("Port") + "/";
         listener = new HttpListener();
         listener.Prefixes.Add(url);
         listener.Start();
         Console.WriteLine("Listening for connections on {0}", url);
-
+        string CDNurl = config.GetValue<string>("CDNurl");
+        string secretKey = config.GetValue<string>("secretKey");
+        uint expireDelay = config.GetValue<uint>("expireDelay");
+        WebToken.WebToken jwt = new WebToken.WebToken(secretKey, expireDelay);
         // Handle requests
-        Task listenTask = HandleIncomingConnections(postDatabase, userDatabase);
+        Task listenTask = HandleIncomingConnections(userDatabase, postDatabase, jwt ,CDNurl);
         listenTask.GetAwaiter().GetResult();
         
         // Close the listener
