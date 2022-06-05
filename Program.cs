@@ -1,9 +1,8 @@
 using System.Net;
 using System.Text;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using VersineResponse;
 
 namespace posts;
 
@@ -84,7 +83,17 @@ class HttpServer
             {
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 string token;
                 string message;
@@ -182,7 +191,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 try
                 {
@@ -244,7 +263,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 try
                 {
@@ -312,7 +341,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
 
                 try
                 {
@@ -406,7 +445,17 @@ class HttpServer
 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
 
                 try
                 {
