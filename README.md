@@ -1,7 +1,7 @@
 # posts
 posts micro-services repo
 
-This micro service goal is to manage all the action that can be done on a post.
+This micro-service goal is to manage all the actions that can be done on a post.
 
 # Endpoints:
 
