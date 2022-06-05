@@ -122,29 +122,42 @@ class HttpServer
                     string id = jwt.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        if (userDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(id)), out BsonDocument user))
+                        if (userDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(id)),
+                                out BsonDocument user))
                         {
-                            Tuple<bool,string> CDNresponse = AddFile(media, CDNurl).Result;
-                            if (CDNresponse.Item1)
+                            if (media == "")
                             {
-                                Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,CDNresponse.Item2,circles);
+                                Post post = new Post(user.GetElement("_id").Value.AsObjectId, message, "no media", circles);
                                 postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                                if (postDatabase.GetSingleDatabaseEntry("pathtomedia",CDNresponse.Item2,out BsonDocument postindb))
-                                {
-                                    Response.Success(resp, "post created successfully", postindb.GetElement("_id").Value.AsObjectId.ToString());
-                                }
-                                else
-                                {
-                                    Response.Fail(resp,"An error occured with the Database");
-                                }
+                                Response.Success(resp, "post created successfully","");
                             }
                             else
                             {
-                                Response.Fail(resp,"An error occured with the CDN");
+                                Tuple<bool, string> CDNresponse = AddFile(media, CDNurl).Result;
+                                if (CDNresponse.Item1)
+                                {
+                                    Post post = new Post(user.GetElement("_id").Value.AsObjectId, message,
+                                        CDNresponse.Item2, circles);
+                                    postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                                    if (postDatabase.GetSingleDatabaseEntry("pathtomedia", CDNresponse.Item2,
+                                            out BsonDocument postindb))
+                                    {
+                                        Response.Success(resp, "post created successfully",
+                                            postindb.GetElement("_id").Value.AsObjectId.ToString());
+                                    }
+                                    else
+                                    {
+                                        Response.Fail(resp, "An error occured with the Database");
+                                    }
+                                }
+                                else
+                                {
+                                    Response.Fail(resp, "An error occured with the CDN");
+                                }
+                                //Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
+                                //postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                                //Response.Success(resp, "post created successfully", null);
                             }
-                            //Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
-                            //postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                            //Response.Success(resp, "post created successfully", null);
                         }
                         else
                         {
