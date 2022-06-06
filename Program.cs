@@ -107,7 +107,7 @@ class HttpServer
                 {
                     foreach (var circle in body.circles)
                     {
-                        circles.Add(circle.ToString());
+                        circles.Add(new BsonObjectId(circle));
                     }
                     media = ((string) body.media).Trim();
                 }
