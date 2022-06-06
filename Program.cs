@@ -36,7 +36,8 @@ class HttpServer
         
              Dictionary<string, string> body = new Dictionary<string, string>
              {
-                 {"data",media}
+                 {"data",media},
+                 {"allowVideos" ,"true"}
              };
         
         
