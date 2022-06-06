@@ -112,12 +112,20 @@ class HttpServer
                     token = "";
                     message = "";
                 }
+
                 try
                 {
                     foreach (string circle in body.circles)
                     {
                         circles.Add(new BsonObjectId(new ObjectId(circle)));
                     }
+                }
+                catch 
+                {
+                    circles = new List<BsonValue>();
+                }
+                try
+                {
                     media = ((string) body.media).Trim();
                 }
                 catch
