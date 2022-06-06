@@ -21,8 +21,7 @@ class HttpServer
             {
                 {"id",filename}
             };
-        
-        
+            
             string requestBody = JsonConvert.SerializeObject(body);
             var httpContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
             var result = await client.PostAsync(CDNurl + "/deleteFile", httpContent);
@@ -136,7 +135,10 @@ class HttpServer
                         {
                             if (media == "")
                             {
-                                Post post = new Post(user.GetElement("_id").Value.AsObjectId, message, "no media", circles);
+                                Post post = new Post(user.GetElement("_id").Value.AsObjectId, message, 
+                                    "no media", circles,user.GetElement("username").Value.AsString,
+                                    user.GetElement("avatar").Value.AsString);
+                                
                                 postDatabase.AddSingleDatabaseEntry(post.ToBson());
                                 Response.Success(resp, "post created successfully","");
                             }
@@ -146,7 +148,8 @@ class HttpServer
                                 if (CDNresponse.Item1)
                                 {
                                     Post post = new Post(user.GetElement("_id").Value.AsObjectId, message,
-                                        CDNresponse.Item2, circles);
+                                        CDNresponse.Item2, circles,user.GetElement("username").Value.AsString,
+                                        user.GetElement("avatar").Value.AsString);
                                     postDatabase.AddSingleDatabaseEntry(post.ToBson());
                                     if (postDatabase.GetSingleDatabaseEntry("pathtomedia", CDNresponse.Item2,
                                             out BsonDocument postindb))
