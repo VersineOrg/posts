@@ -1,9 +1,8 @@
 using System.Net;
 using System.Text;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using VersineResponse;
 
 namespace posts;
 
@@ -22,8 +21,7 @@ class HttpServer
             {
                 {"id",filename}
             };
-        
-        
+            
             string requestBody = JsonConvert.SerializeObject(body);
             var httpContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
             var result = await client.PostAsync(CDNurl + "/deleteFile", httpContent);
@@ -38,7 +36,8 @@ class HttpServer
         
              Dictionary<string, string> body = new Dictionary<string, string>
              {
-                 {"data",media}
+                 {"data",media},
+                 {"allowVideos" ,"true"}
              };
         
         
@@ -84,7 +83,17 @@ class HttpServer
             {
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 string token;
                 string message;
@@ -122,29 +131,46 @@ class HttpServer
                     string id = jwt.GetIdFromToken(token);
                     if (!id.Equals(""))
                     {
-                        if (userDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(id)), out BsonDocument user))
+                        if (userDatabase.GetSingleDatabaseEntry("_id", new BsonObjectId(new ObjectId(id)),
+                                out BsonDocument user))
                         {
-                            Tuple<bool,string> CDNresponse = AddFile(media, CDNurl).Result;
-                            if (CDNresponse.Item1)
+                            if (media == "")
                             {
-                                Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,CDNresponse.Item2,circles);
+                                Post post = new Post(user.GetElement("_id").Value.AsObjectId, message, 
+                                    "no media", circles,user.GetElement("username").Value.AsString,
+                                    user.GetElement("avatar").Value.AsString);
+                                
                                 postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                                if (postDatabase.GetSingleDatabaseEntry("pathtomedia",CDNresponse.Item2,out BsonDocument postindb))
-                                {
-                                    Response.Success(resp, "post created successfully", postindb.GetElement("_id").Value.AsObjectId.ToString());
-                                }
-                                else
-                                {
-                                    Response.Fail(resp,"An error occured with the Database");
-                                }
+                                Response.Success(resp, "post created successfully","");
                             }
                             else
                             {
-                                Response.Fail(resp,"An error occured with the CDN");
+                                Tuple<bool, string> CDNresponse = AddFile(media, CDNurl).Result;
+                                if (CDNresponse.Item1)
+                                {
+                                    Post post = new Post(user.GetElement("_id").Value.AsObjectId, message,
+                                        CDNresponse.Item2, circles,user.GetElement("username").Value.AsString,
+                                        user.GetElement("avatar").Value.AsString);
+                                    postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                                    if (postDatabase.GetSingleDatabaseEntry("pathtomedia", CDNresponse.Item2,
+                                            out BsonDocument postindb))
+                                    {
+                                        Response.Success(resp, "post created successfully",
+                                            postindb.GetElement("_id").Value.AsObjectId.ToString());
+                                    }
+                                    else
+                                    {
+                                        Response.Fail(resp, "An error occured with the Database");
+                                    }
+                                }
+                                else
+                                {
+                                    Response.Fail(resp, "An error occured with the CDN");
+                                }
+                                //Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
+                                //postDatabase.AddSingleDatabaseEntry(post.ToBson());
+                                //Response.Success(resp, "post created successfully", null);
                             }
-                            //Post post = new Post(user.GetElement("_id").Value.AsObjectId,message,"NO CDN FOR NOW BITCH",circles);
-                            //postDatabase.AddSingleDatabaseEntry(post.ToBson());
-                            //Response.Success(resp, "post created successfully", null);
                         }
                         else
                         {
@@ -169,7 +195,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 try
                 {
@@ -231,7 +267,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
                 
                 try
                 {
@@ -299,7 +345,17 @@ class HttpServer
                 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
 
                 try
                 {
@@ -393,7 +449,17 @@ class HttpServer
 
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
 
                 try
                 {
