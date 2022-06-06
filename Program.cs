@@ -114,9 +114,9 @@ class HttpServer
                 }
                 try
                 {
-                    foreach (var circle in body.circles)
+                    foreach (string circle in body.circles)
                     {
-                        circles.Add(new BsonObjectId(circle));
+                        circles.Add(new BsonObjectId(new ObjectId(circle)));
                     }
                     media = ((string) body.media).Trim();
                 }
